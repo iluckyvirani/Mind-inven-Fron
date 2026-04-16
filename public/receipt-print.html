@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Receipt Print</title>
+    <style>
+      :root {
+        --ink: #1f2937;
+        --muted: #64748b;
+        --line: #d9e2ec;
+        --brand: #1f4bc1;
+        --success: #059669;
+        --danger: #dc2626;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #eef2f7;
+        font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+        color: var(--ink);
+      }
+
+      .sheet {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto;
+        background: #fff;
+        padding: 10mm 14mm;
+      }
+
+      .header {
+        text-align: center;
+        border-bottom: 2px dashed var(--line);
+        padding-bottom: 10px;
+      }
+
+      .logo {
+        margin: 0 auto 6px;
+        width: 78px;
+        height: 44px;
+        display: block;
+      }
+
+      .shop-name {
+        margin: 0;
+        color: var(--brand);
+        font-size: 44px;
+        line-height: 1.08;
+        font-weight: 800;
+      }
+
+      .shop-meta {
+        margin: 3px 0;
+        font-size: 21px;
+        color: #4b5563;
+      }
+
+      .block {
+        border-bottom: 1px dashed var(--line);
+        padding: 11px 2px;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .label {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 2px;
+      }
+
+      .value {
+        font-size: 19px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+
+      .small {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .badge {
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 5px 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+
+      .badge-paid {
+        color: #065f46;
+        background: #d1fae5;
+      }
+
+      .badge-partial {
+        color: #92400e;
+        background: #fef3c7;
+      }
+
+      .badge-pending {
+        color: #991b1b;
+        background: #fee2e2;
+      }
+
+      .section-title {
+        margin: 0 0 8px;
+        font-size: 12px;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.7px;
+        font-weight: 700;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 8px;
+        font-size: 13px;
+      }
+
+      th {
+        text-align: left;
+        color: #64748b;
+        font-weight: 700;
+        background: #f8fafc;
+      }
+
+      .right {
+        text-align: right;
+      }
+
+      .totals .line,
+      .payment .line {
+        display: flex;
+        justify-content: space-between;
+        margin: 6px 0;
+        font-size: 20px;
+      }
+
+      .totals .grand {
+        border-top: 1px solid var(--line);
+        margin-top: 8px;
+        padding-top: 8px;
+        font-size: 26px;
+        font-weight: 800;
+      }
+
+      .text-success {
+        color: var(--success);
+        font-weight: 700;
+      }
+
+      .text-danger {
+        color: var(--danger);
+        font-weight: 700;
+      }
+
+      .footer {
+        text-align: center;
+        padding-top: 12px;
+      }
+
+      .footer .thanks {
+        font-size: 20px;
+        color: #334155;
+        margin: 0;
+      }
+
+      .footer .sub {
+        margin: 4px 0 0;
+        color: #94a3b8;
+        font-size: 14px;
+      }
+
+      @page {
+        size: A4;
+        margin: 0;
+      }
+
+      @media print {
+        body {
+          background: #fff;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .sheet {
+          margin: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="sheet" id="sheet"></main>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const key = params.get('key');
+      const dataText = key ? localStorage.getItem(key) : null;
+      const sheet = document.getElementById('sheet');
+
+      if (!dataText) {
+        sheet.innerHTML = '<p style="padding:20px;font-size:16px">No receipt data found. Please reopen print from the Sales Receipt page.</p>';
+      } else {
+        const receipt = JSON.parse(dataText);
+
+        const formatCurrency = (value) =>
+          new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 0,
+          }).format(Number(value || 0));
+
+        const formatDate = (dateStr) =>
+          new Date(dateStr).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          });
+
+        const formatTime = (dateStr) =>
+          new Date(dateStr).toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+
+        const safe = (val) => String(val ?? '').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+        const status = String(receipt.status || 'pending').toLowerCase();
+        const badgeClass = status === 'paid' ? 'badge-paid' : status === 'partial' ? 'badge-partial' : 'badge-pending';
+
+        const rows = (receipt.items || [])
+          .map(
+            (item, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${safe(item.name)}</td>
+              <td class="right">${safe(item.qty)}</td>
+              <td class="right">${formatCurrency(item.price)}</td>
+              <td class="right">${safe(item.discount)}%</td>
+              <td class="right"><strong>${formatCurrency(item.amount)}</strong></td>
+            </tr>
+          `
+          )
+          .join('');
+
+        sheet.innerHTML = `
+          <section class="header">
+            <svg class="logo" viewBox="0 0 120 70" role="img" aria-label="Shop logo">
+              <text x="50%" y="52" text-anchor="middle" font-family="Georgia, serif" font-size="52" font-style="italic" font-weight="700" fill="#2f2f2f">DH</text>
+              <text x="93" y="14" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#2f2f2f">R</text>
+            </svg>
+            <h1 class="shop-name">${safe(receipt.shop?.name || 'Dimag Pharmacy')}</h1>
+            <p class="shop-meta">${safe(receipt.shop?.address || '')}</p>
+            <p class="shop-meta">${receipt.shop?.mobile ? `Mobile: ${safe(receipt.shop.mobile)}` : ''}</p>
+          </section>
+
+          <section class="block">
+            <div class="row">
+              <div>
+                <div class="label">Invoice No.</div>
+                <div class="value">${safe(receipt.invoiceNo)}</div>
+              </div>
+              <div style="text-align:right">
+                <div class="label">Date</div>
+                <div class="value">${formatDate(receipt.date)}</div>
+                <div class="small">${formatTime(receipt.date)}</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="block">
+            <div class="row">
+              <div>
+                <div class="label">Customer</div>
+                <div class="value">${safe(receipt.customer?.name || 'Walk-in')}</div>
+                <div class="small">+91 ${safe(receipt.customer?.phone || '')}</div>
+              </div>
+              <div class="badge ${badgeClass}">${safe(status)}</div>
+            </div>
+          </section>
+
+          <section class="block">
+            <p class="section-title">Medicines</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Medicine</th>
+                  <th class="right">Qty</th>
+                  <th class="right">Price</th>
+                  <th class="right">Disc%</th>
+                  <th class="right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          </section>
+
+          <section class="block totals">
+            <div class="line"><span>Subtotal</span><span>${formatCurrency(receipt.subtotal)}</span></div>
+            ${Number(receipt.discount || 0) > 0 ? `<div class="line"><span>Discount</span><span class="text-danger">-${formatCurrency(receipt.discount)}</span></div>` : ''}
+            <div class="line grand"><span>Grand Total</span><span class="text-success">${formatCurrency(receipt.grandTotal)}</span></div>
+          </section>
+
+          <section class="block payment">
+            <div class="line"><span>Payment Mode</span><span style="text-transform:capitalize">${safe(receipt.paymentMode || '')}</span></div>
+            <div class="line"><span>Amount Paid</span><span class="text-success">${formatCurrency(receipt.amountPaid)}</span></div>
+            ${Number(receipt.balance || 0) > 0 ? `<div class="line"><span>Balance Due</span><span class="text-danger">${formatCurrency(receipt.balance)}</span></div>` : ''}
+          </section>
+
+          <section class="footer">
+            <p class="thanks">Thank you for your purchase!</p>
+            <p class="sub">Get well soon!</p>
+          </section>
+        `;
+
+        setTimeout(() => {
+          window.print();
+          if (key) {
+            localStorage.removeItem(key);
+          }
+        }, 120);
+      }
+    </script>
+  </body>
+</html>
