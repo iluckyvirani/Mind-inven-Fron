@@ -46,7 +46,7 @@ const Topbar = ({ sidebarCollapsed = false }: TopbarProps) => {
             </div>
           </div> */}
           <span className="text-lg font-bold bg-linear-to-r from-emerald-800 to-teal-800 bg-clip-text text-transparent">
-            Dimag Chemist & Surgicals
+            Deemag 2000
           </span>
         </div>
 

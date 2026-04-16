@@ -60,10 +60,10 @@ const LoginPage = () => {
           <h1 className="text-5xl font-bold mb-4 leading-tight">
             Welcome to<br />
             <span className="bg-linear-to-r from-emerald-400 via-teal-400 to-cyan-400 bg-clip-text text-transparent">
-              Dimag Chemist & Surgicals
+              Deemag 2000
             </span>
           </h1>
-          <p className="text-2xl font-medium text-teal-300/80 mb-6">दिमाग केमिस्ट एंड सर्जिकल्स</p>
+          <p className="text-2xl font-medium text-teal-300/80 mb-6">डीमैग 2000</p>
           
           <p className="text-lg text-slate-400 mb-12 max-w-md leading-relaxed">
             Complete Pharmacy Management System. Medicine inventory, billing, customer management, supplier tracking & detailed reports — all in one place.
@@ -88,8 +88,8 @@ const LoginPage = () => {
             <div className="inline-flex w-16 h-16 rounded-2xl bg-linear-to-br from-emerald-600 to-teal-500 items-center justify-center shadow-xl shadow-emerald-500/30 mb-4">
               <span className="text-3xl">💊</span>
             </div>
-            <h2 className="text-2xl font-bold text-slate-800">Dimag Pharmacy</h2>
-            <p className="text-lg text-emerald-600">दिमाग फार्मेसी</p>
+            <h2 className="text-2xl font-bold text-slate-800">Deemag 2000</h2>
+            <p className="text-lg text-emerald-600">डीमैग 2000</p>
           </div>
 
           {/* Header */}
@@ -195,7 +195,7 @@ const LoginPage = () => {
 
           {/* Footer */}
           <p className="text-center text-sm text-slate-400 mt-8">
-            © 2026 Dimag Chemist & Surgicals. All rights reserved.
+            © 2026 Deemag 2000. All rights reserved.
             <br />
             <span className="text-xs">42/4 B, Billochpura, Mathura Road, Agra-2</span>
           </p>

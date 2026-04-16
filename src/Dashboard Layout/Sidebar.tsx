@@ -109,7 +109,7 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
           </div>
           {!isCollapsed && (
             <span className="text-md font-bold bg-linear-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-              Dimag Chemist & Surgicals
+             Deemag 2000
             </span>
           )}
         </div>
