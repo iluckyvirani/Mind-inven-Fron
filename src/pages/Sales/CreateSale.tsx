@@ -553,12 +553,12 @@ const CreateSale = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Prescribed By (optional)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Reference By (optional)</label>
                 <input
                   type="text"
                   value={prescribedBy}
                   onChange={e => setPrescribedBy(e.target.value)}
-                  placeholder="Doctor's name..."
+                  placeholder="Reference name..."
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm"
                 />
               </div>

@@ -9,7 +9,7 @@ const LoginPage = () => {
   const dispatch = useAppDispatch()
   const { loading: isLoading, error, isAuthenticated } = useAppSelector((state) => state.auth)
 
-  const [username, setUsername] = useState('admin@dimagpharmacy.com')
+  const [username, setUsername] = useState('admin@deemag2000.com')
   const [password, setPassword] = useState('admin123')
   const [showPassword, setShowPassword] = useState(false)
 

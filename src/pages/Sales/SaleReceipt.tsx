@@ -228,7 +228,7 @@ td{font-size:8.5px;border:1px solid #cbd5e1;padding:3px 5px}
       <div class="lbl">Customer</div>
       <div class="cname">${safe(receipt.customer.name)}</div>
       <div class="cdet">+91 ${safe(receipt.customer.phone)} &nbsp;·&nbsp; Age: ${safe(receipt.customer.age)} &nbsp;·&nbsp; ${safe(receipt.customer.address)}</div>
-      ${receipt.prescribedBy ? `<div class="cdet"><b>Prescribed by:</b> ${safe(receipt.prescribedBy)}</div>` : ''}
+      ${receipt.prescribedBy ? `<div class="cdet"><b>Reference by:</b> ${safe(receipt.prescribedBy)}</div>` : ''}
     </div>
     <span class="badge">${safe(status)}</span>
   </div>
@@ -352,7 +352,7 @@ td{font-size:8.5px;border:1px solid #cbd5e1;padding:3px 5px}
               <p className="text-xs text-slate-400 uppercase tracking-wide">Customer</p>
               <p className="text-sm font-semibold text-slate-800">{receipt.customer.name}</p>
               <p className="text-xs text-slate-500 py-2">+91 {receipt.customer.phone} &bull; Age: {receipt.customer.age} &bull; {receipt.customer.address}</p>
-              <p className="text-xs text-slate-500 py-2">Prescribed by: {receipt.prescribedBy || 'N/A'}</p>
+              <p className="text-xs text-slate-500 py-2">Reference by: {receipt.prescribedBy || 'N/A'}</p>
             </div>
             <Badge variant={receipt.status === 'paid' ? 'success' : receipt.status === 'partial' ? 'warning' : 'danger'}>
               {receipt.status.toUpperCase()}
