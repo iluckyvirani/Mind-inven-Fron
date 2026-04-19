@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Badge, Select } from '../../components/ui'
 import { salesAPI, pharmacyAPI } from '../../api/endpoints'
 
 type TabType = 'sale' | 'supplier'
@@ -27,24 +26,6 @@ interface SupplierReturnRow {
   date: string
 }
 
-interface ReturnDetail {
-  id: string
-  returnNo: string
-  totalAmount: number
-  reason: string | null
-  date: string
-  sale?: { invoiceNo: string }
-  customer?: { name: string; phone: string }
-  supplier?: { name: string; phone: string }
-  items: Array<{
-    id: string
-    quantity: number
-    unitPrice: number
-    amount: number
-    medicine: { id: string; name: string; batchNo: string }
-  }>
-}
-
 const ReturnsPage = () => {
   const [tab, setTab] = useState<TabType>('sale')
   const [saleReturns, setSaleReturns] = useState<SaleReturnRow[]>([])
@@ -53,11 +34,6 @@ const ReturnsPage = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-
-  // Detail modal
-  const [detailModal, setDetailModal] = useState(false)
-  const [detailData, setDetailData] = useState<ReturnDetail | null>(null)
-  const [detailType, setDetailType] = useState<TabType>('sale')
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount)
@@ -129,12 +105,6 @@ const ReturnsPage = () => {
     if (tab === 'sale') fetchSaleReturns()
     else fetchSupplierReturns()
   }, [tab, fetchSaleReturns, fetchSupplierReturns])
-
-  const openDetail = (data: any, type: TabType) => {
-    setDetailData(data)
-    setDetailType(type)
-    setDetailModal(true)
-  }
 
   // Filter supplier returns client-side
   const filteredSupplierReturns = supplierReturns.filter(r => {
