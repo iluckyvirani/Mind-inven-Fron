@@ -24,6 +24,9 @@ const AddMedicine = lazy(() => import('../pages/Inventory/AddMedicine'))
 // Suppliers
 const SupplierManagement = lazy(() => import('../pages/Suppliers/SupplierManagement'))
 
+// Returns
+const ReturnsPage = lazy(() => import('../pages/Returns/ReturnsPage'))
+
 // Expenses
 const ExpenseDashboard = lazy(() => import('../pages/Expenses/ExpenseDashboard'))
 
@@ -77,6 +80,13 @@ const routes = [
         element: <DashboardLayout />,
         children: [
           { index: true, element: <SupplierManagement /> },
+        ],
+      },
+      {
+        path: '/returns',
+        element: <DashboardLayout />,
+        children: [
+          { index: true, element: <ReturnsPage /> },
         ],
       },
       {

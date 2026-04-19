@@ -110,6 +110,16 @@ export const salesAPI = {
 
   exportPdf: (params?: Record<string, any>) =>
     axiosInstance.get('/sales/export/pdf', { params, responseType: 'blob' }),
+
+  // Sale Returns
+  createReturn: (saleId: string, data: { items: Array<{ medicineId: string; quantity: number }>; reason?: string }) =>
+    axiosInstance.post(`/sales/${saleId}/return`, data),
+
+  getReturns: (saleId: string) =>
+    axiosInstance.get(`/sales/${saleId}/returns`),
+
+  getAllReturns: (params?: Record<string, any>) =>
+    axiosInstance.get('/sales/returns', { params }),
 };
 
 // ============================================
@@ -136,6 +146,13 @@ export const pharmacyAPI = {
   getSupplierById: (id: string) => axiosInstance.get(`/pharmacy/suppliers/${id}`),
   addSupplierPayment: (id: string, data: Record<string, any>) => axiosInstance.post(`/pharmacy/suppliers/${id}/payment`, data),
   getSupplierPayments: (id: string, params?: Record<string, any>) => axiosInstance.get(`/pharmacy/suppliers/${id}/payments`, { params }),
+
+  // Supplier Returns
+  createSupplierReturn: (id: string, data: { items: Array<{ medicineId: string; quantity: number }>; reason?: string }) =>
+    axiosInstance.post(`/pharmacy/suppliers/${id}/return`, data),
+
+  getSupplierReturns: (id: string) =>
+    axiosInstance.get(`/pharmacy/suppliers/${id}/returns`),
 };
 
 // ============================================

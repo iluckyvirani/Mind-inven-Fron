@@ -28,7 +28,7 @@ interface Supplier {
 interface LedgerEntry {
   id: string
   date: string
-  type: 'purchase' | 'payment'
+  type: 'purchase' | 'payment' | 'return'
   description: string
   debit: number
   credit: number
@@ -57,6 +57,16 @@ const SupplierManagement = () => {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
   const [ledgerSupplier, setLedgerSupplier] = useState<string>('')
+
+  // Supplier Return modal state
+  const [showReturnModal, setShowReturnModal] = useState(false)
+  const [returnSupplier, setReturnSupplier] = useState<Supplier | null>(null)
+  const [returnMedicines, setReturnMedicines] = useState<Array<{ medicineId: string; name: string; batchNo: string; stock: number; quantity: number; unitPrice: number }>>([])
+  const [returnReason, setReturnReason] = useState('')
+  const [returnLoading, setReturnLoading] = useState(false)
+  const [returnSubmitting, setReturnSubmitting] = useState(false)
+  const [returnSuccess, setReturnSuccess] = useState(false)
+
   const [addForm, setAddForm] = useState({
     name: '', contactPerson: '', phone: '', email: '',
     address: '', gstNo: '', panNo: '', bankName: '',
@@ -239,15 +249,17 @@ const SupplierManagement = () => {
   const fetchLedger = async (supplierId: string) => {
     try {
       setLedgerLoading(true)
-      const [supplierRes, paymentsRes] = await Promise.all([
+      const [supplierRes, paymentsRes, returnsRes] = await Promise.all([
         pharmacyAPI.getSupplierById(supplierId),
         pharmacyAPI.getSupplierPayments(supplierId, { limit: 200 }),
+        pharmacyAPI.getSupplierReturns(supplierId),
       ])
 
       const supplierData = supplierRes.data?.data || supplierRes.data
       const medicines = supplierData?.medicines || []
       const paymentsData = paymentsRes.data?.data || paymentsRes.data
       const payments = paymentsData?.payments || []
+      const returns = returnsRes.data?.data || returnsRes.data || []
 
       const entries: LedgerEntry[] = []
 
@@ -277,6 +289,20 @@ const SupplierManagement = () => {
         })
       })
 
+      // Returns (credit — reduces what we owe supplier)
+      ;(Array.isArray(returns) ? returns : []).forEach((r: any) => {
+        const itemNames = (r.items || []).map((i: any) => `${i.medicine?.name || 'Medicine'} x${i.quantity}`).join(', ')
+        entries.push({
+          id: `ret-${r.id}`,
+          date: r.date || r.createdAt,
+          type: 'return',
+          description: `Return ${r.returnNo}${itemNames ? ` — ${itemNames}` : ''}${r.reason ? ` (${r.reason})` : ''}`,
+          debit: 0,
+          credit: r.totalAmount,
+          balance: 0,
+        })
+      })
+
       // Sort by date ascending and calculate running balance
       entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       let runningBalance = 0
@@ -299,6 +325,58 @@ const SupplierManagement = () => {
     if (isNaN(d.getTime())) return '—'
     return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   }
+
+  // Supplier Return handlers
+  const openReturnModal = async (supplier: Supplier) => {
+    try {
+      setReturnLoading(true)
+      setShowReturnModal(true)
+      setReturnSupplier(supplier)
+      setReturnReason('')
+      const res = await pharmacyAPI.getSupplierById(supplier.id)
+      const data = res.data?.data || res.data
+      const medicines = data?.medicines || []
+      setReturnMedicines(medicines.filter((m: any) => m.stock > 0).map((m: any) => ({
+        medicineId: m.id,
+        name: m.name,
+        batchNo: m.batchNo || '',
+        stock: m.stock,
+        quantity: 0,
+        unitPrice: m.sellingPrice || 0,
+      })))
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to load supplier details')
+      setShowReturnModal(false)
+    } finally {
+      setReturnLoading(false)
+    }
+  }
+
+  const handleReturnSubmit = async () => {
+    if (!returnSupplier) return
+    const itemsToReturn = returnMedicines.filter(i => i.quantity > 0)
+    if (itemsToReturn.length === 0) {
+      alert('Please select at least one medicine to return')
+      return
+    }
+    try {
+      setReturnSubmitting(true)
+      await pharmacyAPI.createSupplierReturn(returnSupplier.id, {
+        items: itemsToReturn.map(i => ({ medicineId: i.medicineId, quantity: i.quantity })),
+        reason: returnReason || undefined,
+      })
+      setShowReturnModal(false)
+      setReturnSupplier(null)
+      setReturnSuccess(true)
+      fetchSuppliers()
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to process return')
+    } finally {
+      setReturnSubmitting(false)
+    }
+  }
+
+  const supplierReturnTotal = returnMedicines.reduce((sum, i) => sum + (i.quantity * i.unitPrice), 0)
 
   return (
     <div className="space-y-6">
@@ -520,6 +598,15 @@ const SupplierManagement = () => {
                             </svg>
                           </button>
                         )}
+                        <button
+                          onClick={() => openReturnModal(supplier)}
+                          className="p-2 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          title="Return to Supplier"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                          </svg>
+                        </button>
                         {isAdmin && (
                         <button
                           onClick={() => openEditModal(supplier)}
@@ -636,7 +723,7 @@ const SupplierManagement = () => {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Date</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Description</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Debit (Purchase)</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Credit (Payment)</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Credit (Payment/Return)</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Balance</th>
                     </tr>
                   </thead>
@@ -646,7 +733,7 @@ const SupplierManagement = () => {
                         <td className="px-4 py-3 text-sm text-slate-600">{safeFormatDate(entry.date)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${entry.type === 'purchase' ? 'bg-purple-500' : 'bg-emerald-500'}`} />
+                            <span className={`w-2 h-2 rounded-full ${entry.type === 'purchase' ? 'bg-purple-500' : entry.type === 'return' ? 'bg-orange-500' : 'bg-emerald-500'}`} />
                             <span className="text-sm text-slate-800">{entry.description}</span>
                           </div>
                         </td>
@@ -1038,6 +1125,132 @@ const SupplierManagement = () => {
               <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
               <Button className="from-red-600 to-red-500" onClick={() => handleDeleteSupplier(deleteConfirm)}>Delete</Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Supplier Return Modal */}
+      {showReturnModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Return to Supplier</h3>
+                  <p className="text-sm text-slate-500">
+                    {returnSupplier?.name} — Select medicines and quantities to return. Stock will be deducted.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {returnLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500" />
+              </div>
+            ) : (
+              <div className="p-6 space-y-4">
+                {returnMedicines.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Medicine</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Batch</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">In Stock</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Return Qty</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Unit Price</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Return Amt</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {returnMedicines.map((item, idx) => (
+                          <tr key={item.medicineId} className="hover:bg-slate-50">
+                            <td className="px-3 py-2 text-sm font-medium text-slate-800">{item.name}</td>
+                            <td className="px-3 py-2 text-sm text-slate-500">{item.batchNo}</td>
+                            <td className="px-3 py-2 text-sm text-slate-600">{item.stock}</td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                min={0}
+                                max={item.stock}
+                                value={item.quantity}
+                                onChange={e => {
+                                  const val = Math.min(Math.max(0, Number(e.target.value) || 0), item.stock)
+                                  setReturnMedicines(prev => prev.map((ri, i) => i === idx ? { ...ri, quantity: val } : ri))
+                                }}
+                                className="w-20 px-2 py-1 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-sm text-slate-600">{formatCurrency(item.unitPrice)}</td>
+                            <td className="px-3 py-2 text-sm font-medium text-orange-600">
+                              {item.quantity > 0 ? formatCurrency(item.quantity * item.unitPrice) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-slate-500">
+                    No medicines with stock found for this supplier
+                  </div>
+                )}
+
+                <div className="bg-orange-50 rounded-xl p-4 flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">Total Return Amount</span>
+                  <span className="text-lg font-bold text-orange-600">{formatCurrency(supplierReturnTotal)}</span>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Reason for Return (optional)</label>
+                  <textarea
+                    value={returnReason}
+                    onChange={e => setReturnReason(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Expired stock, Damaged goods, Wrong order..."
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => { setShowReturnModal(false); setReturnSupplier(null) }}>Cancel</Button>
+              <Button
+                onClick={handleReturnSubmit}
+                disabled={returnSubmitting || returnMedicines.every(i => i.quantity === 0)}
+                className="from-emerald-600 to-teal-500"
+              >
+                {returnSubmitting ? 'Processing...' : 'Process Return'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Return Success Modal */}
+      {returnSuccess && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-sm mx-4 text-center">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-r from-emerald-600 to-teal-500 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Return Processed!</h3>
+            <p className="text-slate-500 mb-6">The supplier return has been processed successfully. Stock has been deducted and ledger updated.</p>
+            <Button
+              onClick={() => setReturnSuccess(false)}
+              className="from-emerald-600 to-teal-500 w-full"
+            >
+              Done
+            </Button>
           </div>
         </div>
       )}

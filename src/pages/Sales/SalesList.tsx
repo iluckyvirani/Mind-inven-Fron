@@ -66,6 +66,15 @@ const SalesList = () => {
   // Delete confirm state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
+  // Return modal state
+  const [returnModal, setReturnModal] = useState(false)
+  const [returnSaleId, setReturnSaleId] = useState<string | null>(null)
+  const [returnItems, setReturnItems] = useState<Array<{ medicineId: string; name: string; batchNo: string; soldQty: number; alreadyReturned: number; maxQty: number; quantity: number; unitPrice: number; discount: number }>>([])
+  const [returnReason, setReturnReason] = useState('')
+  const [returnLoading, setReturnLoading] = useState(false)
+  const [returnSubmitting, setReturnSubmitting] = useState(false)
+  const [returnSuccess, setReturnSuccess] = useState(false)
+
   // Export PDF state
   const [exporting, setExporting] = useState(false)
 
@@ -307,6 +316,84 @@ const SalesList = () => {
     }
   }
 
+  // Open return modal — fetch sale details + previous returns
+  const openReturnModal = async (saleId: string) => {
+    try {
+      setReturnLoading(true)
+      setReturnModal(true)
+      setReturnSaleId(saleId)
+      setReturnReason('')
+      const [saleRes, returnsRes] = await Promise.all([
+        salesAPI.getById(saleId),
+        salesAPI.getReturns(saleId),
+      ])
+      const sale = saleRes.data.data
+      const previousReturns = returnsRes.data.data || []
+
+      // Calculate already-returned qty per medicine
+      const alreadyReturnedMap: Record<string, number> = {}
+      for (const ret of previousReturns) {
+        for (const ri of (ret.items || [])) {
+          const medId = ri.medicineId || ri.medicine?.id
+          alreadyReturnedMap[medId] = (alreadyReturnedMap[medId] || 0) + ri.quantity
+        }
+      }
+
+      setReturnItems((sale.items || []).map((item: any) => {
+        const medId = item.medicineId || item.medicine?.id
+        const alreadyReturned = alreadyReturnedMap[medId] || 0
+        const remainingQty = item.quantity - alreadyReturned
+        return {
+          medicineId: medId,
+          name: item.medicine?.name || '',
+          batchNo: item.medicine?.batchNo || '',
+          soldQty: item.quantity,
+          alreadyReturned,
+          maxQty: Math.max(0, remainingQty),
+          quantity: 0,
+          unitPrice: item.unitPrice,
+          discount: item.discount || 0,
+        }
+      }).filter((item: any) => item.maxQty > 0))
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to load sale details')
+      setReturnModal(false)
+    } finally {
+      setReturnLoading(false)
+    }
+  }
+
+  const handleReturnSubmit = async () => {
+    if (!returnSaleId) return
+    const itemsToReturn = returnItems.filter(i => i.quantity > 0)
+    if (itemsToReturn.length === 0) {
+      alert('Please select at least one item to return')
+      return
+    }
+    try {
+      setReturnSubmitting(true)
+      await salesAPI.createReturn(returnSaleId, {
+        items: itemsToReturn.map(i => ({ medicineId: i.medicineId, quantity: i.quantity })),
+        reason: returnReason || undefined,
+      })
+      setReturnModal(false)
+      setReturnSaleId(null)
+      setReturnSuccess(true)
+      fetchSales()
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to process return')
+    } finally {
+      setReturnSubmitting(false)
+    }
+  }
+
+  const returnTotal = returnItems.reduce((sum, i) => {
+    if (i.quantity <= 0) return sum
+    const lineTotal = i.quantity * i.unitPrice
+    const disc = (lineTotal * i.discount) / 100
+    return sum + lineTotal - disc
+  }, 0)
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -500,6 +587,15 @@ const SalesList = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                           </svg>
                         </button>
+                        <button
+                          onClick={() => openReturnModal(sale.id)}
+                          className="p-2 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          title="Return Items"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                          </svg>
+                        </button>
                         {isAdmin && (
                         <button
                           onClick={() => openEditModal(sale.id)}
@@ -555,6 +651,145 @@ const SalesList = () => {
               <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
               <Button className="from-red-600 to-red-500" onClick={() => handleDelete(deleteConfirm)}>Delete Sale</Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Return Modal */}
+      {returnModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Sale Return</h3>
+                  <p className="text-sm text-slate-500">Select items and quantities to return. Stock will be restored.</p>
+                </div>
+              </div>
+            </div>
+
+            {returnLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500" />
+              </div>
+            ) : (
+              <div className="p-6 space-y-4">
+                {returnItems.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Medicine</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Batch</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Sold</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Returned</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Returnable</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Return Qty</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Price</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Return Amt</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {returnItems.map((item, idx) => {
+                          const lineTotal = item.quantity * item.unitPrice
+                          const disc = (lineTotal * item.discount) / 100
+                          const amt = lineTotal - disc
+                          return (
+                            <tr key={item.medicineId} className="hover:bg-slate-50">
+                              <td className="px-3 py-2 text-sm font-medium text-slate-800">{item.name}</td>
+                              <td className="px-3 py-2 text-sm text-slate-500">{item.batchNo}</td>
+                              <td className="px-3 py-2 text-sm text-slate-600">{item.soldQty}</td>
+                              <td className="px-3 py-2 text-sm text-orange-600">{item.alreadyReturned > 0 ? item.alreadyReturned : '—'}</td>
+                              <td className="px-3 py-2 text-sm font-medium text-slate-800">{item.maxQty}</td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={item.maxQty}
+                                  value={item.quantity}
+                                  onChange={e => {
+                                    const val = Math.min(Math.max(0, Number(e.target.value) || 0), item.maxQty)
+                                    setReturnItems(prev => prev.map((ri, i) => i === idx ? { ...ri, quantity: val } : ri))
+                                  }}
+                                  className="w-20 px-2 py-1 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-sm text-slate-600">{formatCurrency(item.unitPrice)}</td>
+                              <td className="px-3 py-2 text-sm font-medium text-orange-600">
+                                {item.quantity > 0 ? formatCurrency(amt) : '—'}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-3">
+                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <p className="text-slate-600 font-medium">All items fully returned</p>
+                    <p className="text-sm text-slate-400">No more items available for return on this sale.</p>
+                  </div>
+                )}
+
+                <div className="bg-orange-50 rounded-xl p-4 flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-700">Total Return Amount</span>
+                  <span className="text-lg font-bold text-orange-600">{formatCurrency(returnTotal)}</span>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Reason for Return (optional)</label>
+                  <textarea
+                    value={returnReason}
+                    onChange={e => setReturnReason(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Expired, Wrong medicine, Customer changed mind..."
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => { setReturnModal(false); setReturnSaleId(null) }}>Cancel</Button>
+              <Button
+                onClick={handleReturnSubmit}
+                disabled={returnSubmitting || returnItems.every(i => i.quantity === 0)}
+                className="from-emerald-600 to-teal-500"
+              >
+                {returnSubmitting ? 'Processing...' : 'Process Return'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Return Success Modal */}
+      {returnSuccess && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-sm mx-4 text-center">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-r from-emerald-600 to-teal-500 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Return Processed!</h3>
+            <p className="text-slate-500 mb-6">The return has been processed successfully. Stock has been restored and ledger updated.</p>
+            <Button
+              onClick={() => setReturnSuccess(false)}
+              className="from-emerald-600 to-teal-500 w-full"
+            >
+              Done
+            </Button>
           </div>
         </div>
       )}

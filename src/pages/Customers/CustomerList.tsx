@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, Badge, Input, Select } from '../../components/ui'
-import { customerAPI } from '../../api/endpoints'
+import { customerAPI, salesAPI } from '../../api/endpoints'
 import { useAppSelector } from '../../hooks/useRedux'
 
 interface Customer {
@@ -25,7 +25,7 @@ interface Customer {
 interface LedgerEntry {
   id: string
   date: string
-  type: 'sale' | 'payment'
+  type: 'sale' | 'payment' | 'return'
   description: string
   debit: number
   credit: number
@@ -203,7 +203,7 @@ const CustomerList = () => {
       const entries: LedgerEntry[] = []
 
       // Sales (debit — amount owed by customer)
-      sales.forEach((s: any) => {
+      for (const s of sales) {
         entries.push({
           id: `sale-${s.id}`,
           date: s.date || s.createdAt,
@@ -226,7 +226,25 @@ const CustomerList = () => {
             balance: 0,
           })
         }
-      })
+
+        // Fetch returns for this sale
+        try {
+          const retRes = await salesAPI.getReturns(s.id)
+          const returns = retRes.data?.data || retRes.data || []
+          ;(Array.isArray(returns) ? returns : []).forEach((r: any) => {
+            const itemNames = (r.items || []).map((i: any) => `${i.medicine?.name || 'Medicine'} x${i.quantity}`).join(', ')
+            entries.push({
+              id: `ret-${r.id}`,
+              date: r.date || r.createdAt,
+              type: 'return',
+              description: `Return ${r.returnNo}${itemNames ? ` — ${itemNames}` : ''}${r.reason ? ` (${r.reason})` : ''}`,
+              debit: 0,
+              credit: r.totalAmount,
+              balance: 0,
+            })
+          })
+        } catch { /* no returns */ }
+      }
 
       // Sort by date and calculate running balance
       entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -542,7 +560,7 @@ const CustomerList = () => {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Date</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Description</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Debit (Sale)</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Credit (Payment)</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Credit (Payment/Return)</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Balance</th>
                     </tr>
                   </thead>
@@ -552,7 +570,7 @@ const CustomerList = () => {
                         <td className="px-4 py-3 text-sm text-slate-600">{formatDate(entry.date)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${entry.type === 'sale' ? 'bg-purple-500' : 'bg-emerald-500'}`} />
+                            <span className={`w-2 h-2 rounded-full ${entry.type === 'sale' ? 'bg-purple-500' : entry.type === 'return' ? 'bg-orange-500' : 'bg-emerald-500'}`} />
                             <span className="text-sm text-slate-800">{entry.description}</span>
                           </div>
                         </td>
@@ -585,10 +603,20 @@ const CustomerList = () => {
       {/* Add Customer Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-100">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-800">Add New Customer</h2>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">Add New Customer</h2>
+                    <p className="text-sm text-slate-500">Fill in the customer details below</p>
+                  </div>
+                </div>
                 <button
                   onClick={() => setShowAddModal(false)}
                   className="p-2 hover:bg-slate-100 rounded-xl"
@@ -599,72 +627,95 @@ const CustomerList = () => {
                 </button>
               </div>
             </div>
-            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="p-6 space-y-6">
+              {/* Personal Information */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Customer Name *</label>
-                <Input
-                  placeholder="Enter customer name"
-                  value={addForm.name}
-                  onChange={(e) => setAddForm(f => ({ ...f, name: e.target.value }))}
-                />
+                <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Personal Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Customer Name *</label>
+                    <Input
+                      placeholder="Enter customer name"
+                      value={addForm.name}
+                      onChange={(e) => setAddForm(f => ({ ...f, name: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Phone *</label>
+                    <Input
+                      placeholder="Enter 10-digit phone number"
+                      value={addForm.phone}
+                      onChange={(e) => setAddForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Age</label>
+                    <Input
+                      type="number"
+                      placeholder="e.g. 35"
+                      value={addForm.age}
+                      onChange={(e) => setAddForm(f => ({ ...f, age: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                    <Input
+                      type="email"
+                      placeholder="Enter email address"
+                      value={addForm.email}
+                      onChange={(e) => setAddForm(f => ({ ...f, email: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+                    <Input
+                      placeholder="Enter full address"
+                      value={addForm.address}
+                      onChange={(e) => setAddForm(f => ({ ...f, address: e.target.value }))}
+                    />
+                  </div>
+                </div>
               </div>
+
+              {/* Bank & Tax Details */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Phone *</label>
-                <Input
-                  placeholder="Enter 10-digit phone number"
-                  value={addForm.phone}
-                  onChange={(e) => setAddForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Age</label>
-                <Input
-                  type="number"
-                  placeholder="e.g. 35"
-                  value={addForm.age}
-                  onChange={(e) => setAddForm(f => ({ ...f, age: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-                <Input
-                  placeholder="Enter address"
-                  value={addForm.address}
-                  onChange={(e) => setAddForm(f => ({ ...f, address: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <Input
-                  type="email"
-                  placeholder="Enter email address"
-                  value={addForm.email}
-                  onChange={(e) => setAddForm(f => ({ ...f, email: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Bank Name</label>
-                <Input
-                  placeholder="Enter bank name"
-                  value={addForm.bankName}
-                  onChange={(e) => setAddForm(f => ({ ...f, bankName: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Account No</label>
-                <Input
-                  placeholder="Enter account number"
-                  value={addForm.accountNo}
-                  onChange={(e) => setAddForm(f => ({ ...f, accountNo: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">GST No</label>
-                <Input
-                  placeholder="Enter GST number"
-                  value={addForm.gstNo}
-                  onChange={(e) => setAddForm(f => ({ ...f, gstNo: e.target.value }))}
-                />
+                <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                  Bank &amp; Tax Details
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Bank Name</label>
+                    <Input
+                      placeholder="Enter bank name"
+                      value={addForm.bankName}
+                      onChange={(e) => setAddForm(f => ({ ...f, bankName: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Account No</label>
+                    <Input
+                      placeholder="Enter account number"
+                      value={addForm.accountNo}
+                      onChange={(e) => setAddForm(f => ({ ...f, accountNo: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">GST No</label>
+                    <Input
+                      placeholder="Enter GST number"
+                      value={addForm.gstNo}
+                      onChange={(e) => setAddForm(f => ({ ...f, gstNo: e.target.value }))}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             <div className="p-6 border-t border-slate-100 flex gap-3">
