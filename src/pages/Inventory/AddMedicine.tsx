@@ -141,9 +141,10 @@ const AddMedicine = () => {
 
         // Record supplier payment if amount was paid
         if (formData.supplierId && formData.paymentStatus !== 'pending') {
-          const totalPurchaseAmount = Number(formData.quantity) * Number(formData.purchasePrice)
+          const subtotalAmt = Number(formData.quantity) * Number(formData.purchasePrice)
+          const totalWithGSTAmt = subtotalAmt * (1 + Number(formData.gstPercent) / 100)
           const paidAmount = formData.paymentStatus === 'paid'
-            ? totalPurchaseAmount
+            ? totalWithGSTAmt
             : Number(formData.amountPaid) || 0
 
           if (paidAmount > 0) {
@@ -180,6 +181,13 @@ const AddMedicine = () => {
   }
 
   const profit = calculateProfit()
+
+  const qty = Number(formData.quantity) || 0
+  const purchasePerUnit = Number(formData.purchasePrice) || 0
+  const gst = Number(formData.gstPercent) || 0
+  const subtotal = qty * purchasePerUnit
+  const gstAmount = subtotal * gst / 100
+  const totalWithGST = subtotal + gstAmount
 
   return (
     <div className="space-y-6">
@@ -483,11 +491,14 @@ const AddMedicine = () => {
             <div className="mt-4 p-4 bg-blue-50 rounded-xl">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-700">Total Purchase Amount</p>
-                  <p className="text-xs text-blue-600">{formData.quantity} units × ₹{formData.purchasePrice}</p>
+                  <p className="text-sm text-blue-700">Total Purchase Amount (incl. GST)</p>
+                  <p className="text-xs text-blue-600">
+                    {formData.quantity} units × ₹{formData.purchasePrice} = ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {gst > 0 && ` + GST ${gst}% (₹${gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })})`}
+                  </p>
                 </div>
                 <p className="text-2xl font-bold text-blue-700">
-                  ₹{(Number(formData.quantity) * Number(formData.purchasePrice)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹{totalWithGST.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
@@ -525,20 +536,24 @@ const AddMedicine = () => {
                 <Input
                   type="number"
                   step="0.01"
-                  value={formData.amountPaid}
-                  onChange={(e) => handleChange('amountPaid', e.target.value)}
+                  value={formData.paymentStatus === 'paid' ? totalWithGST.toFixed(2) : formData.amountPaid}
+                  onChange={(e) => {
+                    if (formData.paymentStatus !== 'paid') handleChange('amountPaid', e.target.value)
+                  }}
+                  readOnly={formData.paymentStatus === 'paid'}
                   placeholder="₹0.00"
+                  className={formData.paymentStatus === 'paid' ? 'bg-slate-50 cursor-not-allowed' : ''}
                 />
               </div>
             )}
-            {formData.paymentStatus !== 'pending' && formData.quantity && formData.purchasePrice && formData.amountPaid && (
+            {formData.paymentStatus === 'partial' && formData.quantity && formData.purchasePrice && formData.amountPaid && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Pending Amount
                 </label>
                 <div className="h-10 px-3 flex items-center bg-red-50 rounded-xl border border-red-200">
                   <span className="text-red-700 font-medium">
-                    ₹{(Number(formData.quantity) * Number(formData.purchasePrice) - Number(formData.amountPaid)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    ₹{(totalWithGST - Number(formData.amountPaid)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>

@@ -11,6 +11,7 @@ interface MedicineItem {
   quantity: number
   unitPrice: number
   discount: number
+  gstPercent: number
   amount: number
 }
 
@@ -20,6 +21,7 @@ interface SearchMedicine {
   batchNo: string
   stock: number
   price: number
+  gstPercent: number
 }
 
 const CreateSale = () => {
@@ -135,6 +137,7 @@ const CreateSale = () => {
             batchNo: m.batchNo || '',
             stock: m.stock,
             price: m.sellingPrice,
+            gstPercent: m.gstPercent || 0,
           }))
         setSearchResults(data)
       } catch {
@@ -149,6 +152,8 @@ const CreateSale = () => {
   const filteredMedicines = searchResults
 
   const addMedicine = useCallback((med: SearchMedicine) => {
+    const subtotal = med.price
+    const gstAmount = subtotal * (med.gstPercent / 100)
     setItems(prev => [
       ...prev,
       {
@@ -159,7 +164,8 @@ const CreateSale = () => {
         quantity: 1,
         unitPrice: med.price,
         discount: 0,
-        amount: med.price,
+        gstPercent: med.gstPercent,
+        amount: subtotal + gstAmount,
       },
     ])
     setMedicineSearch('')
@@ -170,8 +176,11 @@ const CreateSale = () => {
     setItems(prev => {
       const updated = [...prev]
       const item = { ...updated[index], [field]: value }
-      const subtotal = item.quantity * item.unitPrice
-      item.amount = subtotal - (subtotal * item.discount) / 100
+      const lineSubtotal = item.quantity * item.unitPrice
+      const discountAmount = (lineSubtotal * item.discount) / 100
+      const afterDiscount = lineSubtotal - discountAmount
+      const gstAmount = afterDiscount * (item.gstPercent / 100)
+      item.amount = afterDiscount + gstAmount
       updated[index] = item
       return updated
     })
@@ -187,9 +196,12 @@ const CreateSale = () => {
     const itemSubtotal = item.quantity * item.unitPrice
     return sum + (itemSubtotal * item.discount) / 100
   }, 0)
-  const taxRate = 0 // GST if applicable
-  const taxAmount = ((subtotal - totalDiscount) * taxRate) / 100
-  const grandTotal = subtotal - totalDiscount + taxAmount
+  const totalGST = items.reduce((sum, item) => {
+    const itemSubtotal = item.quantity * item.unitPrice
+    const afterDiscount = itemSubtotal - (itemSubtotal * item.discount) / 100
+    return sum + afterDiscount * (item.gstPercent / 100)
+  }, 0)
+  const grandTotal = subtotal - totalDiscount + totalGST
   const balance = grandTotal - (typeof amountPaid === 'number' ? amountPaid : 0)
 
   const formatCurrency = (amount: number) =>
@@ -208,6 +220,7 @@ const CreateSale = () => {
         quantity: i.quantity,
         unitPrice: i.unitPrice,
         discount: i.discount,
+        gstPercent: i.gstPercent,
       })),
       paymentMode: paymentMode as 'cash' | 'card' | 'upi',
       amountPaid: typeof amountPaid === 'number' ? amountPaid : 0,
@@ -421,6 +434,7 @@ const CreateSale = () => {
                       <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Qty</th>
                       <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Price</th>
                       <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Disc %</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">GST %</th>
                       <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Amount</th>
                       <th className="px-3 py-2"></th>
                     </tr>
@@ -461,7 +475,12 @@ const CreateSale = () => {
                             className="w-16 px-2 py-1 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                           />
                         </td>
-                        <td className="px-3 py-2 text-sm font-medium text-slate-800">{formatCurrency(item.amount)}</td>
+                        <td className="px-3 py-2">
+                          <span className="text-sm text-slate-600">{item.gstPercent}%</span>
+                        </td>
+                        <td className="px-3 py-2 text-sm font-medium text-slate-800">
+                          {formatCurrency(item.quantity * item.unitPrice * (1 - item.discount / 100))}
+                        </td>
                         <td className="px-3 py-2">
                           <button
                             type="button"
@@ -509,10 +528,10 @@ const CreateSale = () => {
                 <span className="text-slate-600">Discount</span>
                 <span className="font-medium text-red-600">-{formatCurrency(totalDiscount)}</span>
               </div>
-              {taxRate > 0 && (
+              {totalGST > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Tax ({taxRate}%)</span>
-                  <span className="font-medium text-slate-800">{formatCurrency(taxAmount)}</span>
+                  <span className="text-slate-600">GST</span>
+                  <span className="font-medium text-slate-800">+{formatCurrency(totalGST)}</span>
                 </div>
               )}
               <div className="border-t border-slate-200 pt-3 flex justify-between">

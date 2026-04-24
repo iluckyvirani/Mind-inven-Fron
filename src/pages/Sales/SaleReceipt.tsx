@@ -58,8 +58,8 @@ const SaleReceipt = () => {
           items,
           subtotal: sale.subtotal || 0,
           prescribedBy: sale.prescribedby || '',
-          discount: sale.totalDiscount || 0,
-          tax: 0,
+          discount: sale.discount || sale.totalDiscount || 0,
+          tax: sale.tax || 0,
           grandTotal: sale.grandTotal,
           paymentMode: (sale.paymentMode || '').toLowerCase(),
           amountPaid: sale.amountPaid,
@@ -247,7 +247,7 @@ td{font-size:8.5px;border:1px solid #cbd5e1;padding:3px 5px}
       <div class="col-title">Summary</div>
       <div class="line"><span>Subtotal</span><span>${formatCurrency(receipt.subtotal)}</span></div>
       ${receipt.discount > 0 ? `<div class="line"><span>Discount</span><span class="gd">-${formatCurrency(receipt.discount)}</span></div>` : ''}
-      ${receipt.tax > 0 ? `<div class="line"><span>Tax</span><span>${formatCurrency(receipt.tax)}</span></div>` : ''}
+      ${receipt.tax > 0 ? `<div class="line"><span>GST</span><span class="gs">+${formatCurrency(receipt.tax)}</span></div>` : ''}
       <div class="grand-line"><span>Grand Total</span><span class="gs">${formatCurrency(receipt.grandTotal)}</span></div>
     </div>
     <div class="col">
@@ -403,8 +403,8 @@ td{font-size:8.5px;border:1px solid #cbd5e1;padding:3px 5px}
           )}
           {receipt.tax > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-slate-600">Tax</span>
-              <span className="text-slate-800">{formatCurrency(receipt.tax)}</span>
+              <span className="text-slate-600">GST</span>
+              <span className="text-slate-800">+{formatCurrency(receipt.tax)}</span>
             </div>
           )}
           <div className="flex justify-between text-base font-bold pt-2 border-t border-slate-200">

@@ -41,6 +41,9 @@ export const customerAPI = {
 
   getPurchaseHistory: (id: string, params?: Record<string, any>) =>
     axiosInstance.get(`/customers/${id}/purchases`, { params }),
+
+  collectPayment: (id: string, data: { amount: number; paymentMode: string }) =>
+    axiosInstance.post(`/customers/${id}/payment`, data),
 };
 
 // ============================================

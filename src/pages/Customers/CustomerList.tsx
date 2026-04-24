@@ -55,6 +55,13 @@ const CustomerList = () => {
   // Delete confirm state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
+  // Collect payment modal state
+  const [paymentModal, setPaymentModal] = useState(false)
+  const [paymentCustomer, setPaymentCustomer] = useState<Customer | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentMode, setPaymentMode] = useState('CASH')
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false)
+
   // Ledger state
   const [ledgerCustomer, setLedgerCustomer] = useState<string>('')
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
@@ -166,6 +173,31 @@ const CustomerList = () => {
       setDeleteConfirm(null)
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to delete customer')
+    }
+  }
+
+  const openPaymentModal = (customer: Customer) => {
+    setPaymentCustomer(customer)
+    setPaymentAmount(customer.pendingAmount.toFixed(2))
+    setPaymentMode('CASH')
+    setPaymentModal(true)
+  }
+
+  const handleCollectPayment = async () => {
+    if (!paymentCustomer || !paymentAmount) return
+    const amt = parseFloat(paymentAmount)
+    if (isNaN(amt) || amt <= 0) return
+    try {
+      setPaymentSubmitting(true)
+      await customerAPI.collectPayment(paymentCustomer.id, { amount: amt, paymentMode })
+      setPaymentModal(false)
+      setPaymentCustomer(null)
+      setPaymentAmount('')
+      fetchCustomers()
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to record payment')
+    } finally {
+      setPaymentSubmitting(false)
     }
   }
 
@@ -356,7 +388,11 @@ const CustomerList = () => {
           Customers
         </button>
         <button
-          onClick={() => setActiveTab('ledger')}
+          onClick={() => {
+            setActiveTab('ledger')
+            // Re-fetch ledger if a customer is already selected (ensures fresh data after payments)
+            if (ledgerCustomer) fetchLedger(ledgerCustomer)
+          }}
           className={`px-4 py-2 rounded-xl font-medium transition-colors ${
             activeTab === 'ledger'
               ? 'bg-emerald-500 text-white'
@@ -408,6 +444,7 @@ const CustomerList = () => {
                   >
                     Total Spent <SortIcon field="totalSpent" />
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Balance</th>
                   <th
                     className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase cursor-pointer hover:text-emerald-600"
                     onClick={() => toggleSort('lastPurchase')}
@@ -432,6 +469,11 @@ const CustomerList = () => {
                     <td className="px-4 py-3 text-sm text-slate-600">{customer.phone}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{customer.totalPurchases} bills</td>
                     <td className="px-4 py-3 text-sm font-medium text-emerald-600">{formatCurrency(customer.totalSpent)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-sm font-medium ${customer.pendingAmount > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                        {customer.pendingAmount > 0 ? formatCurrency(customer.pendingAmount) : '—'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-sm text-slate-600">{formatDate(customer.lastPurchase)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -445,6 +487,17 @@ const CustomerList = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                           </svg>
                         </button>
+                        {customer.pendingAmount > 0 && (
+                          <button
+                            onClick={() => openPaymentModal(customer)}
+                            className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Collect Payment"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                          </button>
+                        )}
                         {isAdmin && (
                         <button
                           onClick={() => openEditModal(customer)}
@@ -597,6 +650,72 @@ const CustomerList = () => {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* Collect Payment Modal */}
+      {paymentModal && paymentCustomer && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">Collect Payment</h3>
+                <p className="text-sm text-slate-500">{paymentCustomer.name} — {paymentCustomer.phone}</p>
+              </div>
+            </div>
+
+            <div className="bg-red-50 rounded-xl p-4 mb-5 flex items-center justify-between">
+              <span className="text-sm text-red-700 font-medium">Total Outstanding Balance</span>
+              <span className="text-lg font-bold text-red-700">{formatCurrency(paymentCustomer.pendingAmount)}</span>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Amount <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min={0.01}
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+                {parseFloat(paymentAmount) > 0 && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Remaining after this payment: {formatCurrency(Math.max(0, paymentCustomer.pendingAmount - parseFloat(paymentAmount)))}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Mode</label>
+                <Select
+                  value={paymentMode}
+                  onChange={e => setPaymentMode(e.target.value)}
+                  options={[
+                    { value: 'CASH', label: 'Cash' },
+                    { value: 'CARD', label: 'Card' },
+                    { value: 'UPI', label: 'UPI' },
+                  ]}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => { setPaymentModal(false); setPaymentCustomer(null) }}>Cancel</Button>
+              <Button
+                onClick={handleCollectPayment}
+                disabled={paymentSubmitting || !paymentAmount || parseFloat(paymentAmount) <= 0}
+                className="from-emerald-600 to-teal-500"
+              >
+                {paymentSubmitting ? 'Processing...' : 'Record Payment'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -57,6 +57,7 @@ const SupplierManagement = () => {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
   const [ledgerSupplier, setLedgerSupplier] = useState<string>('')
+  const [ledgerStats, setLedgerStats] = useState<{ totalPurchase: number; totalPaid: number; balance: number } | null>(null)
 
   // Supplier Return modal state
   const [showReturnModal, setShowReturnModal] = useState(false)
@@ -259,18 +260,30 @@ const SupplierManagement = () => {
       const medicines = supplierData?.medicines || []
       const paymentsData = paymentsRes.data?.data || paymentsRes.data
       const payments = paymentsData?.payments || []
+      const supplierStats = paymentsData?.supplier || null
+      if (supplierStats) {
+        setLedgerStats({
+          totalPurchase: supplierStats.totalPurchase || 0,
+          totalPaid: supplierStats.totalPaid || 0,
+          balance: supplierStats.balance ?? (supplierStats.totalPurchase - supplierStats.totalPaid),
+        })
+      }
       const returns = returnsRes.data?.data || returnsRes.data || []
 
       const entries: LedgerEntry[] = []
 
       // Purchases (debit): derive from medicines linked to this supplier
       medicines.forEach((m: any) => {
+        const subtotal = (m.stock || 0) * (m.unitPrice || 0)
+        const gstAmount = subtotal * ((m.gstPercent || 0) / 100)
+        const totalWithGST = subtotal + gstAmount
+        const gstLabel = m.gstPercent > 0 ? ` + GST ${m.gstPercent}%` : ''
         entries.push({
           id: `med-${m.id}`,
           date: m.createdAt || supplierData.createdAt,
           type: 'purchase',
-          description: `${m.name} — ${m.stock} units @ ₹${m.sellingPrice}`,
-          debit: (m.stock || 0) * (m.sellingPrice || 0),
+          description: `${m.name} — ${m.stock} units @ ₹${m.unitPrice}${gstLabel}`,
+          debit: totalWithGST,
           credit: 0,
           balance: 0,
         })
@@ -662,7 +675,7 @@ const SupplierManagement = () => {
               onChange={(e) => {
                 setLedgerSupplier(e.target.value)
                 if (e.target.value) fetchLedger(e.target.value)
-                else setLedgerEntries([])
+                else { setLedgerEntries([]); setLedgerStats(null) }
               }}
               options={[
                 { value: '', label: 'Choose a supplier...' },
@@ -697,19 +710,19 @@ const SupplierManagement = () => {
                   <div className="bg-purple-50 rounded-xl p-4">
                     <p className="text-sm text-purple-600">Total Purchases (Debit)</p>
                     <p className="text-xl font-bold text-purple-700">
-                      {formatCurrency(ledgerEntries.reduce((sum, e) => sum + e.debit, 0))}
+                      {formatCurrency(ledgerStats?.totalPurchase ?? ledgerEntries.reduce((sum, e) => sum + e.debit, 0))}
                     </p>
                   </div>
                   <div className="bg-emerald-50 rounded-xl p-4">
                     <p className="text-sm text-emerald-600">Total Paid (Credit)</p>
                     <p className="text-xl font-bold text-emerald-700">
-                      {formatCurrency(ledgerEntries.reduce((sum, e) => sum + e.credit, 0))}
+                      {formatCurrency(ledgerStats?.totalPaid ?? ledgerEntries.reduce((sum, e) => sum + e.credit, 0))}
                     </p>
                   </div>
                   <div className="bg-red-50 rounded-xl p-4">
                     <p className="text-sm text-red-600">Outstanding Balance</p>
                     <p className="text-xl font-bold text-red-700">
-                      {formatCurrency(ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0)}
+                      {formatCurrency(ledgerStats?.balance ?? (ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0))}
                     </p>
                   </div>
                 </div>

@@ -66,6 +66,13 @@ const SalesList = () => {
   // Delete confirm state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
+  // Make Payment modal state
+  const [paymentModal, setPaymentModal] = useState(false)
+  const [paymentSale, setPaymentSale] = useState<Sale | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentMode, setPaymentMode] = useState('CASH')
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false)
+
   // Return modal state
   const [returnModal, setReturnModal] = useState(false)
   const [returnSaleId, setReturnSaleId] = useState<string | null>(null)
@@ -313,6 +320,31 @@ const SalesList = () => {
       fetchSales()
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to delete sale')
+    }
+  }
+
+  const openPaymentModal = (sale: Sale) => {
+    setPaymentSale(sale)
+    setPaymentAmount(sale.balance.toFixed(2))
+    setPaymentMode('CASH')
+    setPaymentModal(true)
+  }
+
+  const handleMakePayment = async () => {
+    if (!paymentSale || !paymentAmount) return
+    const amt = parseFloat(paymentAmount)
+    if (isNaN(amt) || amt <= 0) return
+    try {
+      setPaymentSubmitting(true)
+      await salesAPI.updatePayment(paymentSale.id, { amount: amt, paymentMode })
+      setPaymentModal(false)
+      setPaymentSale(null)
+      setPaymentAmount('')
+      fetchSales()
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to record payment')
+    } finally {
+      setPaymentSubmitting(false)
     }
   }
 
@@ -587,6 +619,17 @@ const SalesList = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                           </svg>
                         </button>
+                        {sale.balance > 0 && (
+                          <button
+                            onClick={() => openPaymentModal(sale)}
+                            className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Make Payment"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                          </button>
+                        )}
                         <button
                           onClick={() => openReturnModal(sale.id)}
                           className="p-2 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
@@ -639,6 +682,83 @@ const SalesList = () => {
           </div>
         )}
       </div>
+
+      {/* Make Payment Modal */}
+      {paymentModal && paymentSale && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">Make Payment</h3>
+                <p className="text-sm text-slate-500">{paymentSale.invoiceNo} — {paymentSale.customerName}</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl p-4 mb-5 grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Total</p>
+                <p className="text-sm font-bold text-slate-800">{formatCurrency(paymentSale.total)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Paid</p>
+                <p className="text-sm font-bold text-emerald-600">{formatCurrency(paymentSale.paid)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Balance Due</p>
+                <p className="text-sm font-bold text-red-600">{formatCurrency(paymentSale.balance)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Amount Paying <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min={0.01}
+                  max={paymentSale.balance}
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+                {parseFloat(paymentAmount) > 0 && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Remaining after payment: {formatCurrency(Math.max(0, paymentSale.balance - parseFloat(paymentAmount)))}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Mode</label>
+                <Select
+                  value={paymentMode}
+                  onChange={e => setPaymentMode(e.target.value)}
+                  options={[
+                    { value: 'CASH', label: 'Cash' },
+                    { value: 'CARD', label: 'Card' },
+                    { value: 'UPI', label: 'UPI' },
+                  ]}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => { setPaymentModal(false); setPaymentSale(null) }}>Cancel</Button>
+              <Button
+                onClick={handleMakePayment}
+                disabled={paymentSubmitting || !paymentAmount || parseFloat(paymentAmount) <= 0}
+                className="from-emerald-600 to-teal-500"
+              >
+                {paymentSubmitting ? 'Processing...' : 'Record Payment'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
