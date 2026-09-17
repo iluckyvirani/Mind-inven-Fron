@@ -16,6 +16,7 @@ interface Sale {
   balance: number
   paymentMode: string
   status: string
+  hasReturn: boolean
 }
 
 interface EditItem {
@@ -48,6 +49,7 @@ const SalesList = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [modeFilter, setModeFilter] = useState('All')
+  const [returnFilter, setReturnFilter] = useState('All')
   const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'all'>('all')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
@@ -93,6 +95,8 @@ const SalesList = () => {
       if (toDate) params.dateTo = toDate
       if (statusFilter !== 'All') params.status = statusFilter.toUpperCase()
       if (modeFilter !== 'All') params.paymentMode = modeFilter.toUpperCase()
+      if (returnFilter === 'returned') params.hasReturn = 'true'
+      if (returnFilter === 'no-return') params.hasReturn = 'false'
       if (searchTerm) params.search = searchTerm
 
       const res = await salesAPI.exportPdf(params)
@@ -119,6 +123,8 @@ const SalesList = () => {
       if (searchTerm) params.search = searchTerm
       if (statusFilter !== 'All') params.status = statusFilter.toUpperCase()
       if (modeFilter !== 'All') params.paymentMode = modeFilter.toUpperCase()
+      if (returnFilter === 'returned') params.hasReturn = 'true'
+      if (returnFilter === 'no-return') params.hasReturn = 'false'
       if (fromDate) params.dateFrom = fromDate
       if (toDate) params.dateTo = toDate
 
@@ -135,6 +141,7 @@ const SalesList = () => {
         balance: s.balance,
         paymentMode: (s.paymentMode || '').toLowerCase(),
         status: (s.paymentStatus || '').toLowerCase(),
+        hasReturn: (s._count?.saleReturns || 0) > 0,
       }))
       setSales(data)
     } catch (err) {
@@ -142,7 +149,7 @@ const SalesList = () => {
     } finally {
       setLoading(false)
     }
-  }, [searchTerm, statusFilter, modeFilter, fromDate, toDate])
+  }, [searchTerm, statusFilter, modeFilter, returnFilter, fromDate, toDate])
 
   useEffect(() => { fetchSales() }, [fetchSales])
 
@@ -498,9 +505,9 @@ const SalesList = () => {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Search */}
-          <div className="md:col-span-2 relative">
+          <div className="lg:col-span-2 relative">
             <svg className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -532,7 +539,16 @@ const SalesList = () => {
               { value: 'upi', label: 'UPI' },
             ]}
           />
-          <div className="flex gap-2">
+          <Select
+            value={returnFilter}
+            onChange={(e) => setReturnFilter(e.target.value)}
+            options={[
+              { value: 'All', label: 'All Returns' },
+              { value: 'returned', label: 'Returned' },
+              { value: 'no-return', label: 'No Return' },
+            ]}
+          />
+          <div className="flex gap-2 lg:col-span-2">
             <input
               type="date"
               value={fromDate}
@@ -588,9 +604,19 @@ const SalesList = () => {
                 {filteredSales.map(sale => (
                   <tr key={sale.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3">
-                      <span className="text-sm font-medium text-blue-600 cursor-pointer hover:underline" onClick={() => navigate(`/sales/receipt/${sale.id}`)}>
-                        {sale.invoiceNo}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-blue-600 cursor-pointer hover:underline" onClick={() => navigate(`/sales/receipt/${sale.id}`)}>
+                          {sale.invoiceNo}
+                        </span>
+                        {sale.hasReturn && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FFF0E6] border border-orange-200 text-[#C2410C] text-xs font-medium">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
+                            Returned
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-sm font-medium text-slate-800">{sale.customerName}</p>
@@ -632,7 +658,11 @@ const SalesList = () => {
                         )}
                         <button
                           onClick={() => openReturnModal(sale.id)}
-                          className="p-2 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          className={`p-2 rounded-lg transition-colors ${
+                            sale.hasReturn
+                              ? 'text-[#C2410C] bg-[#FFF0E6] hover:bg-orange-100'
+                              : 'text-slate-500 hover:text-orange-600 hover:bg-orange-50'
+                          }`}
                           title="Return Items"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

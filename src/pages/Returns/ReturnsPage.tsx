@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { salesAPI, pharmacyAPI } from '../../api/endpoints'
 
 type TabType = 'sale' | 'supplier'
 
 interface SaleReturnRow {
   id: string
+  saleId: string
   returnNo: string
   invoiceNo: string
   customerName: string
@@ -27,6 +29,7 @@ interface SupplierReturnRow {
 }
 
 const ReturnsPage = () => {
+  const navigate = useNavigate()
   const [tab, setTab] = useState<TabType>('sale')
   const [saleReturns, setSaleReturns] = useState<SaleReturnRow[]>([])
   const [supplierReturns, setSupplierReturns] = useState<SupplierReturnRow[]>([])
@@ -51,6 +54,7 @@ const ReturnsPage = () => {
       const res = await salesAPI.getAllReturns(params)
       const data = (res.data.data || []).map((r: any) => ({
         id: r.id,
+        saleId: r.sale?.id || r.saleId || '',
         returnNo: r.returnNo,
         invoiceNo: r.sale?.invoiceNo || '',
         customerName: r.customer?.name || 'Walk-in',
@@ -210,12 +214,13 @@ const ReturnsPage = () => {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Items</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Amount</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Reason</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Actions</th>
                 </tr>
               </thead>
               {loading ? (
                 <tbody>
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="flex items-center justify-center py-16">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500" />
                       </div>
@@ -226,14 +231,21 @@ const ReturnsPage = () => {
                 <tbody className="divide-y divide-slate-100">
                   {saleReturns.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-12 text-slate-400">No sale returns found</td>
+                      <td colSpan={8} className="text-center py-12 text-slate-400">No sale returns found</td>
                     </tr>
                   ) : saleReturns.map(r => (
                     <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3">
                         <span className="text-sm font-medium text-orange-600">{r.returnNo}</span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-blue-600 font-medium">{r.invoiceNo}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="text-sm text-blue-600 font-medium cursor-pointer hover:underline"
+                          onClick={() => r.saleId && navigate(`/sales/receipt/${r.saleId}`)}
+                        >
+                          {r.invoiceNo}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">
                         <p className="text-sm font-medium text-slate-800">{r.customerName}</p>
                         <p className="text-xs text-slate-500">{r.customerPhone}</p>
@@ -242,6 +254,19 @@ const ReturnsPage = () => {
                       <td className="px-4 py-3 text-sm text-slate-600">{r.itemsCount}</td>
                       <td className="px-4 py-3 text-sm font-medium text-orange-600">{formatCurrency(r.totalAmount)}</td>
                       <td className="px-4 py-3 text-sm text-slate-500 max-w-[200px] truncate">{r.reason || '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => r.saleId && navigate(`/sales/receipt/${r.saleId}`)}
+                          disabled={!r.saleId}
+                          className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          title="View Receipt"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
